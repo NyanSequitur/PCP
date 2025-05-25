@@ -1,3 +1,6 @@
+# minimax.py
+
+import time
 import math
 import numpy as np
 from typing import Optional
@@ -8,75 +11,94 @@ from game_utils import (
     check_move_status, MoveStatus, PlayerAction, BoardPiece, SavedState
 )
 
-def generate_move_minimax(
+def generate_move_time_limited(
     board: np.ndarray,
     player: BoardPiece,
-    saved_state: SavedState | None,
-    depth: int = 4
-) -> tuple[PlayerAction, SavedState | None]:
+    saved_state: Optional[SavedState] = None,
+    time_limit_secs: float = 10.0
+) -> tuple[PlayerAction, Optional[SavedState]]:
     """
-    Choose the column with the highest Negamax score (with alpha-beta pruning).
-    depth: number of plies to look ahead.
+    Choose the best move found within the given time limit (in seconds) using iterative deepening
+    with Negamax and alpha-beta pruning.
     """
-    valid_cols = [
-        c for c in range(BOARD_COLS)
-        if check_move_status(board, PlayerAction(c)) == MoveStatus.IS_VALID
-    ]
-    best_score = -math.inf
+    start_time = time.monotonic()
+    deadline = start_time + time_limit_secs
+
+    # helper negamax defined inside to access deadline
+    def _negamax_inner(
+        b: np.ndarray,
+        depth: int,
+        alpha: float,
+        beta: float,
+        turn: BoardPiece
+    ) -> float:
+        # time check
+        if time.monotonic() > deadline:
+            raise TimeoutError
+
+        # Check terminal on previous move
+        prev = _other(turn)
+        state = check_end_state(b, prev)
+        if state == GameState.IS_WIN:
+            return -math.inf
+        if state == GameState.IS_DRAW:
+            return 0.0
+
+        if depth == 0:
+            return _heuristic(b, turn)
+
+        value = -math.inf
+        for c in range(BOARD_COLS):
+            if check_move_status(b, PlayerAction(c)) != MoveStatus.IS_VALID:
+                continue
+            new_board = b.copy()
+            apply_player_action(new_board, PlayerAction(c), turn)
+            score = -_negamax_inner(new_board, depth - 1, -beta, -alpha, _other(turn))
+            value = max(value, score)
+            alpha = max(alpha, score)
+            if alpha >= beta:
+                break
+        return value
+
+    # valid moves
+    valid_cols = [c for c in range(BOARD_COLS)
+                  if check_move_status(board, PlayerAction(c)) == MoveStatus.IS_VALID]
     best_col = valid_cols[0]
-    alpha = -math.inf
-    beta = math.inf
+    best_score = -math.inf
+    depth = 1
 
-    for col in valid_cols:
-        # simulate
-        temp = board.copy()
-        apply_player_action(temp, PlayerAction(col), player)
-        # opponent to move next, so flip sign
-        score = -_negamax(temp, depth - 1, -beta, -alpha, _other(player))
-        if score > best_score:
-            best_score = score
-            best_col = col
-        alpha = max(alpha, score)
+    try:
+        # iterative deepening
+        while True:
+            # time check before each depth iteration
+            if time.monotonic() > deadline:
+                break
 
+            alpha = -math.inf
+            beta = math.inf
+            local_best_score = -math.inf
+            local_best_col = valid_cols[0]
+
+            for col in valid_cols:
+                if time.monotonic() > deadline:
+                    raise TimeoutError
+                trial_board = board.copy()
+                apply_player_action(trial_board, PlayerAction(col), player)
+                score = -_negamax_inner(trial_board, depth - 1, -beta, -alpha, _other(player))
+                if score > local_best_score:
+                    local_best_score = score
+                    local_best_col = col
+                alpha = max(alpha, score)
+
+            # update best move if this depth completed
+            best_score = local_best_score
+            best_col = local_best_col
+            depth += 1
+            print(f"Depth {depth} completed, best score: {best_score:.2f}, move: {best_col}")
+    except TimeoutError:
+        # time expired, return the best move from last completed depth
+        pass
     return PlayerAction(best_col), saved_state
-
-
-def _negamax(
-    board: np.ndarray,
-    depth: int,
-    alpha: float,
-    beta: float,
-    player: BoardPiece
-) -> float:
-    """
-    Internal negamax recursive helper.
-    Returns the best score from `player`'s perspective.
-    """
-    # Check terminal on **previous** move, i.e. other player
-    prev = _other(player)
-    state = check_end_state(board, prev)
-    if state == GameState.IS_WIN:
-        # previous player just won
-        return -math.inf
-    if state == GameState.IS_DRAW:
-        return 0.0
-
-    if depth == 0:
-        return _heuristic(board, player)
-
-    value = -math.inf
-    for col in range(BOARD_COLS):
-        if check_move_status(board, PlayerAction(col)) != MoveStatus.IS_VALID:
-            continue
-        temp = board.copy()
-        apply_player_action(temp, PlayerAction(col), player)
-        score = -_negamax(temp, depth - 1, -beta, -alpha, _other(player))
-        value = max(value, score)
-        alpha = max(alpha, score)
-        if alpha >= beta:
-            break  # alpha-beta cutoff
-
-    return value
 
 
 def _other(player: BoardPiece) -> BoardPiece:
@@ -113,14 +135,12 @@ def _heuristic(board: np.ndarray, player: BoardPiece) -> float:
     # all windows of length 4 horizontally
     for r in range(BOARD_ROWS):
         for c in range(BOARD_COLS - 3):
-            window = board[r, c:c+4]
-            score += score_window(window)
+            score += score_window(board[r, c:c+4])
 
     # vertical
     for c in range(BOARD_COLS):
         for r in range(BOARD_ROWS - 3):
-            window = board[r:r+4, c]
-            score += score_window(window)
+            score += score_window(board[r:r+4, c])
 
     # diagonal up-right
     for r in range(BOARD_ROWS - 3):

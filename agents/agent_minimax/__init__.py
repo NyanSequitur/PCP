@@ -1,1 +1,1 @@
-from .minimax import generate_move_minimax as generate_move
+from .minimax import generate_move_time_limited as generate_move

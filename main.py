@@ -28,7 +28,7 @@ def human_vs_agent(
         for init, player in zip((init_1, init_2)[::play_first], players):
             init(initialize_game_state(), player)
 
-        saved_state = {PLAYER1: None, PLAYER2: None}
+        saved_state: dict = {PLAYER1: None, PLAYER2: None}
         board = initialize_game_state()
         gen_moves = (generate_move_1, generate_move_2)[::play_first]
         player_names = (player_1, player_2)[::play_first]
@@ -49,7 +49,7 @@ def human_vs_agent(
                     board.copy(),  # copy so agents don’t modify the real board
                     player, saved_state[player], *args
                 )
-                print(f'Move time: {time.time() - t0:.3f}s')
+                # print(f'Move time: {time.time() - t0:.3f}s')
 
                 move_status = check_move_status(board, action)
                 if move_status != MoveStatus.IS_VALID:
@@ -79,5 +79,4 @@ if __name__ == "__main__":
     #human_vs_agent(user_move)
     from agents.agent_minimax import generate_move as minimax_move
 
-    # play human vs. minimax at depth 4
-    human_vs_agent(user_move, minimax_move, args_2=(4,))
+    human_vs_agent(user_move, minimax_move, args_2=())
