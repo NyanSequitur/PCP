@@ -318,7 +318,7 @@ def connected_four(board: np.ndarray, player: BoardPiece) -> bool:
     for row in range(BOARD_ROWS):
         for col in range(BOARD_COLS):
             if board[row, col] != player:
-                continue
+                continue  # Skip cells not occupied by the player
 
             # Check all four directions from this piece
             for dx, dy in _DIRECTIONS:
@@ -328,17 +328,17 @@ def connected_four(board: np.ndarray, player: BoardPiece) -> bool:
                     new_col = col + dx * step
 
                     if not (0 <= new_row < BOARD_ROWS and 0 <= new_col < BOARD_COLS):
-                        break
+                        break  # Out of bounds
 
                     if board[new_row, new_col] == player:
                         count += 1
                     else:
-                        break
+                        break  # Sequence broken
 
                 if count == 4:
-                    return True
+                    return True  # Found four in a row
 
-    return False
+    return False  # No four-in-a-row found
 
 
 def check_end_state(board: np.ndarray, player: BoardPiece) -> GameState:
@@ -402,14 +402,14 @@ def check_move_status(board: np.ndarray, column: Any) -> MoveStatus:
         The status of the move (valid, wrong type, out of bounds, or full column).
     """
     if not _is_player_action(column):
-        return MoveStatus.WRONG_TYPE
+        return MoveStatus.WRONG_TYPE  # Must be numpy.int8
 
     col_index = int(column)
 
     if not 0 <= col_index < BOARD_COLS:
-        return MoveStatus.OUT_OF_BOUNDS
+        return MoveStatus.OUT_OF_BOUNDS  # Out of bounds
 
     if board[INDEX_HIGHEST_ROW, col_index] != NO_PLAYER:
-        return MoveStatus.FULL_COLUMN
+        return MoveStatus.FULL_COLUMN  # Top cell is occupied
 
     return MoveStatus.IS_VALID

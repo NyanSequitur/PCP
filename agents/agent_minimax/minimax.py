@@ -43,6 +43,7 @@ def generate_move_time_limited(
     start_time = time.monotonic()
     deadline = start_time + time_limit_secs
 
+    # Negamax with alpha-beta pruning: recursively evaluate moves for both players
     def _negamax(
         b: np.ndarray,
         depth: int,
@@ -72,11 +73,11 @@ def generate_move_time_limited(
             Heuristic value of the board.
         """
         if time.monotonic() > deadline:
-            raise TimeoutError
+            raise TimeoutError  # Stop search if time limit exceeded
         prev = _other(turn)
         state = check_end_state(b, prev)
         if state == GameState.IS_WIN:
-            return -math.inf
+            return -math.inf  # Previous player just won
         if state == GameState.IS_DRAW:
             return 0.0
         if depth == 0:
@@ -87,11 +88,12 @@ def generate_move_time_limited(
                 continue
             new_board = b.copy()
             apply_player_action(new_board, PlayerAction(c), turn)
+            # Negamax recursion: switch player and invert score
             score = -_negamax(new_board, depth - 1, -beta, -alpha, _other(turn))
             value = max(value, score)
             alpha = max(alpha, score)
             if alpha >= beta:
-                break
+                break  # Beta cutoff
         return value
 
     valid_cols = [c for c in range(BOARD_COLS)
@@ -102,6 +104,7 @@ def generate_move_time_limited(
     best_score = -math.inf
     depth = 1
 
+    # Iterative deepening: increase search depth until time runs out
     try:
         while True:
             if time.monotonic() > deadline:
@@ -110,11 +113,13 @@ def generate_move_time_limited(
             beta = math.inf
             local_best_score = -math.inf
             local_best_col = valid_cols[0]
+            # Try all valid columns at this depth
             for col in valid_cols:
                 if time.monotonic() > deadline:
                     raise TimeoutError
                 trial_board = board.copy()
                 apply_player_action(trial_board, PlayerAction(col), player)
+                # Negamax search for opponent's best response
                 score = -_negamax(trial_board, depth - 1, -beta, -alpha, _other(player))
                 if score > local_best_score:
                     local_best_score = score
@@ -124,7 +129,7 @@ def generate_move_time_limited(
             best_col = local_best_col
             depth += 1
     except TimeoutError:
-        pass
+        pass  # Return the best move found so far if time runs out
     return PlayerAction(best_col), saved_state
 
 def _other(player: BoardPiece) -> BoardPiece:
@@ -165,13 +170,13 @@ def _heuristic(board: np.ndarray, player: BoardPiece) -> float:
         cnt_opponent = np.count_nonzero(window == _other(player))
         cnt_empty = np.count_nonzero(window == NO_PLAYER)
         if cnt_player == 4:
-            return 100.0
+            return 100.0  # Win
         if cnt_player == 3 and cnt_empty == 1:
-            return 5.0
+            return 5.0   # Three in a row
         if cnt_player == 2 and cnt_empty == 2:
-            return 2.0
+            return 2.0   # Two in a row
         if cnt_opponent == 3 and cnt_empty == 1:
-            return -4.0
+            return -4.0  # Block opponent
         return 0.0
 
     score = 0.0

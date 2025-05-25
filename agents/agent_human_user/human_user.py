@@ -57,7 +57,7 @@ def user_move(
         input_move_string = query_user(input)
         input_move = convert_str_to_action(input_move_string)
         if input_move is None:
-            continue
+            continue  # Invalid input, prompt again
         move_status = check_move_status(board, input_move)
         if move_status != MoveStatus.IS_VALID:
             print(f"Move is invalid: {move_status.value}")
@@ -86,10 +86,10 @@ def convert_str_to_action(input_move_string: str) -> PlayerAction | None:
         if not 1 <= user_col <= 7:
             print("Invalid move: Input must be an integer between 1 and 7.")
             print("Try again.")
-            return None
+            return None  # Out of bounds
         internal_col = user_col_to_internal(user_col)
         return PlayerAction(internal_col)
     except ValueError:
         print("Invalid move: Input must be an integer between 1 and 7.")
         print("Try again.")
-        return None
+        return None  # Not an integer

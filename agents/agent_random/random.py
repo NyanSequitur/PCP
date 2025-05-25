@@ -32,11 +32,11 @@ def generate_move_random(
     tuple[PlayerAction, SavedState | None]
         The chosen move and updated state.
     """
-    # collect all valid, non-full columns
+    # Collect all valid, non-full columns for random selection
     valid_cols = [
         c for c in range(BOARD_COLS)
         if check_move_status(board, PlayerAction(c)) == MoveStatus.IS_VALID
     ]
-    # choose one at random
+    # Randomly choose one valid column
     choice = random.choice(valid_cols)
     return PlayerAction(choice), saved_state

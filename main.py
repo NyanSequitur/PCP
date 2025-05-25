@@ -49,12 +49,15 @@ def human_vs_agent(
         Initialization function for player 2.
     """
     players = (PLAYER1, PLAYER2)
+    # Play each game twice, swapping who goes first each time
     for play_first in (1, -1):
+        # Initialize both agents (if needed) before each game
         for init, player in zip((init_1, init_2)[::play_first], players):
             init(initialize_game_state(), player)
 
         saved_state: dict = {PLAYER1: None, PLAYER2: None}
         board = initialize_game_state()
+        # Swap move generators and player names if play_first == -1
         gen_moves = (generate_move_1, generate_move_2)[::play_first]
         player_names = (player_1, player_2)[::play_first]
         gen_args = (args_1, args_2)[::play_first]
@@ -69,8 +72,9 @@ def human_vs_agent(
                     f'{player_name} you are playing with '
                     f'{PLAYER1_PRINT if player == PLAYER1 else PLAYER2_PRINT}'
                 )
+                # Pass a copy of the board to prevent agents from modifying the real board
                 action, saved_state[player] = gen_move(
-                    board.copy(),  # copy so agents don’t modify the real board
+                    board.copy(),
                     player, saved_state[player], *args
                 )
 
