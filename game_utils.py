@@ -189,10 +189,12 @@ def pretty_print_board(board: np.ndarray) -> str:
 
     # Build row strings from *top* to *bottom*
     row_lines: list[str] = []
-    for row in range(BOARD_ROWS - 1, -1, -1):  # highest → lowest
-        cells = "".join(f" {_PRINT_MAP[int(board[row, col])]} " for col in range(BOARD_COLS))
+    for row_index, row_data in enumerate(board[::-1, :]):  # highest → lowest
+        cells = "".join(f" {_PRINT_MAP[int(col)]} " for col in row_data)
+        # Calculate actual row index for user-facing display
+        actual_row = BOARD_ROWS - 1 - row_index
         # Show user-facing row number (1-based)
-        row_lines.append(f"|{cells}|  ← {internal_row_to_user(row)}")
+        row_lines.append(f"|{cells}|  ← {internal_row_to_user(actual_row)}")
 
     horizontal_border = f"|{'=' * (BOARD_COLS * 3)}|"
     # Show user-facing column numbers (1-7)

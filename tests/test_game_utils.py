@@ -33,6 +33,67 @@ def test_initialize_game_state_shape_dtype():
     assert np.all(board == NO_PLAYER)
 
 
+def test_pretty_print_board_format():
+    """Test that pretty_print_board produces the expected format."""
+    board = initialize_game_state()
+    board[0, 0] = PLAYER1  # Bottom-left
+    board[1, 0] = PLAYER2  # One row up from bottom-left
+    board[0, 3] = PLAYER1  # Bottom, column 4
+
+    printed = pretty_print_board(board)
+    lines = printed.splitlines()
+    
+    # Check basic structure
+    assert len(lines) == BOARD_ROWS + 6  # board rows + legend + borders + index
+    
+    # Check legend is present
+    assert "Legend:" in lines[1]
+    assert "X = Player 1" in lines[1]
+    assert "O = Player 2" in lines[1]
+    
+    # Check borders
+    horizontal_border = f"|{'=' * (BOARD_COLS * 3)}|"
+    assert lines[3] == horizontal_border
+    assert lines[-2] == horizontal_border
+    
+    # Check column indices at bottom
+    expected_index_line = "| 1  2  3  4  5  6  7 |"
+    assert lines[-1] == expected_index_line
+    
+    # Check that pieces appear in correct positions
+    # The bottom row (board[0, :]) should be the second-to-last board row in the output
+    bottom_row_line = lines[-3]  # Second from bottom, before border
+    assert " X " in bottom_row_line  # PLAYER1 at position 0
+    assert " X " in bottom_row_line  # PLAYER1 at position 3
+    
+    # Check row numbers are displayed
+    assert "← 1" in bottom_row_line  # Bottom row should show row 1
+
+
+def test_string_to_board_parsing():
+    """Test that string_to_board correctly parses a board string."""
+    # Create a known board state
+    board = initialize_game_state()
+    board[0, 0] = PLAYER1
+    board[1, 0] = PLAYER2
+    board[0, 3] = PLAYER1
+    board[5, 6] = PLAYER2  # Top-right corner
+    
+    # Convert to string and back
+    printed = pretty_print_board(board)
+    restored = string_to_board(printed)
+    
+    # Check specific positions
+    assert restored[0, 0] == PLAYER1
+    assert restored[1, 0] == PLAYER2
+    assert restored[0, 3] == PLAYER1
+    assert restored[5, 6] == PLAYER2
+    
+    # Check that empty positions remain empty
+    assert restored[0, 1] == NO_PLAYER
+    assert restored[2, 2] == NO_PLAYER
+
+
 def test_pretty_print_roundtrip():
     """Test that pretty_print_board and string_to_board are inverses."""
     board = initialize_game_state()

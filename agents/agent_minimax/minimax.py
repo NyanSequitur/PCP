@@ -15,6 +15,9 @@ from game_utils import (
     check_move_status, MoveStatus, PlayerAction, BoardPiece, SavedState
 )
 
+# Remark: Awesome! There really isn't much for me to complain about, great work!
+# Take the remarks I left as suggestions, maybe you find them helpful.
+
 def generate_move_time_limited(
     board: np.ndarray,
     player: BoardPiece,
@@ -74,11 +77,11 @@ def generate_move_time_limited(
         """
         if time.monotonic() > deadline:
             raise TimeoutError  # Stop search if time limit exceeded
-        prev = _other(turn)
-        state = check_end_state(b, prev)
-        if state == GameState.IS_WIN:
+        previous_player = _other(turn)
+        game_state = check_end_state(b, previous_player)
+        if game_state == GameState.IS_WIN:
             return -math.inf  # Previous player just won
-        if state == GameState.IS_DRAW:
+        if game_state == GameState.IS_DRAW:
             return 0.0
         if depth == 0:
             return _heuristic(b, turn)
@@ -132,6 +135,139 @@ def generate_move_time_limited(
         pass  # Return the best move found so far if time runs out
     return PlayerAction(best_col), saved_state
 
+def _score_window(window: np.ndarray, player: BoardPiece) -> float:
+    """
+    Score a 4-cell window for the given player.
+    
+    Parameters
+    ----------
+    window : np.ndarray
+        A 4-element array representing a window on the board.
+    player : BoardPiece
+        The player to score for.
+        
+    Returns
+    -------
+    float
+        Score for this window.
+    """
+    player_count = np.count_nonzero(window == player)
+    opponent_count = np.count_nonzero(window == _other(player))
+    empty_count = np.count_nonzero(window == NO_PLAYER)
+    
+    if player_count == 4:
+        return 100.0  # Win
+    if player_count == 3 and empty_count == 1:
+        return 5.0   # Three in a row
+    if player_count == 2 and empty_count == 2:
+        return 2.0   # Two in a row
+    if opponent_count == 3 and empty_count == 1:
+        return -4.0  # Block opponent
+    return 0.0
+
+
+def _score_center_column(board: np.ndarray, player: BoardPiece) -> float:
+    """
+    Score the center column control for the given player.
+    
+    Parameters
+    ----------
+    board : np.ndarray
+        The game board.
+    player : BoardPiece
+        The player to score for.
+        
+    Returns
+    -------
+    float
+        Score for center column control.
+    """
+    center_col = BOARD_COLS // 2
+    center_count = int(np.count_nonzero(board[:, center_col] == player))
+    return center_count * 3.0
+
+
+def _score_horizontal_windows(board: np.ndarray, player: BoardPiece) -> float:
+    """
+    Score all horizontal 4-cell windows.
+    
+    Parameters
+    ----------
+    board : np.ndarray
+        The game board.
+    player : BoardPiece
+        The player to score for.
+        
+    Returns
+    -------
+    float
+        Total score for horizontal windows.
+    """
+    score = 0.0
+    for row in range(BOARD_ROWS):
+        for col in range(BOARD_COLS - 3):
+            window = board[row, col:col+4]
+            score += _score_window(window, player)
+    return score
+
+
+def _score_vertical_windows(board: np.ndarray, player: BoardPiece) -> float:
+    """
+    Score all vertical 4-cell windows.
+    
+    Parameters
+    ----------
+    board : np.ndarray
+        The game board.
+    player : BoardPiece
+        The player to score for.
+        
+    Returns
+    -------
+    float
+        Total score for vertical windows.
+    """
+    score = 0.0
+    for col in range(BOARD_COLS):
+        for row in range(BOARD_ROWS - 3):
+            window = board[row:row+4, col]
+            score += _score_window(window, player)
+    return score
+
+
+def _score_diagonal_windows(board: np.ndarray, player: BoardPiece) -> float:
+    """
+    Score all diagonal 4-cell windows (both directions).
+    
+    Parameters
+    ----------
+    board : np.ndarray
+        The game board.
+    player : BoardPiece
+        The player to score for.
+        
+    Returns
+    -------
+    float
+        Total score for diagonal windows.
+    """
+    score = 0.0
+    
+    # Positive diagonal (↗︎)
+    for row in range(BOARD_ROWS - 3):
+        for col in range(BOARD_COLS - 3):
+            window = np.array([board[row+i, col+i] for i in range(4)])
+            score += _score_window(window, player)
+    
+    # Negative diagonal (↘︎)
+    for row in range(BOARD_ROWS - 3):
+        for col in range(3, BOARD_COLS):
+            window = np.array([board[row+i, col-i] for i in range(4)])
+            score += _score_window(window, player)
+    
+    return score
+
+
 def _other(player: BoardPiece) -> BoardPiece:
     """
     Return the opponent of the given player.
@@ -165,36 +301,14 @@ def _heuristic(board: np.ndarray, player: BoardPiece) -> float:
     float
         Heuristic score.
     """
-    def score_window(window: np.ndarray) -> float:
-        cnt_player = np.count_nonzero(window == player)
-        cnt_opponent = np.count_nonzero(window == _other(player))
-        cnt_empty = np.count_nonzero(window == NO_PLAYER)
-        if cnt_player == 4:
-            return 100.0  # Win
-        if cnt_player == 3 and cnt_empty == 1:
-            return 5.0   # Three in a row
-        if cnt_player == 2 and cnt_empty == 2:
-            return 2.0   # Two in a row
-        if cnt_opponent == 3 and cnt_empty == 1:
-            return -4.0  # Block opponent
-        return 0.0
-
     score = 0.0
-    center_col = BOARD_COLS // 2
-    center_count = int(np.count_nonzero(board[:, center_col] == player))
-    score += center_count * 3.0
-    for r in range(BOARD_ROWS):
-        for c in range(BOARD_COLS - 3):
-            score += score_window(board[r, c:c+4])
-    for c in range(BOARD_COLS):
-        for r in range(BOARD_ROWS - 3):
-            score += score_window(board[r:r+4, c])
-    for r in range(BOARD_ROWS - 3):
-        for c in range(BOARD_COLS - 3):
-            window = np.array([board[r+i, c+i] for i in range(4)])
-            score += score_window(window)
-    for r in range(BOARD_ROWS - 3):
-        for c in range(3, BOARD_COLS):
-            window = np.array([board[r+i, c-i] for i in range(4)])
-            score += score_window(window)
+    
+    # Score center column control
+    score += _score_center_column(board, player)
+    
+    # Score all window types
+    score += _score_horizontal_windows(board, player)
+    score += _score_vertical_windows(board, player)
+    score += _score_diagonal_windows(board, player)
+    
     return score
