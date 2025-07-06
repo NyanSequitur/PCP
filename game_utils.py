@@ -134,9 +134,11 @@ def clear_console():
     Clear the console screen in a cross-platform way.
     """
     if sys.platform.startswith("win"):
-        os.system("cls")
+        #os.system("cls")
+        pass
     else:
-        os.system("clear")
+        #os.system("clear")
+        pass
 
 
 def user_col_to_internal(col: int) -> int:
