@@ -17,7 +17,7 @@ def test_minimax_winning_move():
         apply_player_action(board, PlayerAction(c), PLAYER1)
     for c in range(3):
         apply_player_action(board, PlayerAction(c), PLAYER2)
-    move, _ = generate_move_time_limited(board, PLAYER1, time_limit_secs=5.0)
+    move, _ = generate_move_time_limited(board, PLAYER1, time_limit_secs=2.0)
     assert move == 3
 
 def test_minimax_blocks_opponent():
@@ -27,7 +27,7 @@ def test_minimax_blocks_opponent():
         apply_player_action(board, PlayerAction(c), PLAYER2)
     for c in range(3):
         apply_player_action(board, PlayerAction(c), PLAYER1)
-    move, _ = generate_move_time_limited(board, PLAYER1, time_limit_secs=5.0)
+    move, _ = generate_move_time_limited(board, PLAYER1, time_limit_secs=2.0)
     assert move == 3
 
 def test_minimax_draw_raises():
@@ -51,14 +51,14 @@ def test_minimax_time_limit():
     """Test that Minimax respects the time limit."""
     board = initialize_game_state()
     start = time.time()
-    move, _ = generate_move_time_limited(board, PLAYER1, time_limit_secs=5.0)
+    move, _ = generate_move_time_limited(board, PLAYER1, time_limit_secs=1.0)
     elapsed = time.time() - start
-    assert elapsed < 6.0
+    assert elapsed < 2.0
 
 def test_minimax_move_in_range():
     """Test that Minimax returns a move within valid column range."""
     board = initialize_game_state()
-    move, _ = generate_move_time_limited(board, PLAYER1, time_limit_secs=5.0)
+    move, _ = generate_move_time_limited(board, PLAYER1, time_limit_secs=1.0)
     assert 0 <= move < 7
 
 def test_minimax_transposition_table_basic():

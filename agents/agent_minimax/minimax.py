@@ -6,17 +6,6 @@ Implements a time-limited move generator using Negamax with alpha-beta pruning a
 
 import time
 import math
-import io
-import csv
-import zipfile
-import urllib.request
-from urllib.error import URLError, HTTPError
-
-import numpy as np
-
-
-import time
-import math
 import numpy as np
 from typing import Optional, Tuple, Dict
 from dataclasses import dataclass
@@ -39,161 +28,139 @@ class TranspositionEntry:
     flag: str  # 'exact', 'lower', 'upper' for exact value, lower bound, upper bound
 
 class MinimaxSavedState(SavedState):
-    """
-    Saved state for the minimax agent.  
-    Adds a transposition table *and* a small opening-book extracted from
-    the UCI “connect-4.csv” file (all non-terminal 8-ply positions).
-    """
-
+    """Saved state for minimax agent with transposition table."""
+    
     def __init__(self):
-        # ── transposition/ordering caches ────────────────────────────────────
         self.transposition_table: Dict[str, TranspositionEntry] = {}
         self.move_ordering: Dict[str, list[PlayerAction]] = {}
-
-        # ── opening-book cache ───────────────────────────────────────────────
-        self.opening_book: Dict[str, float] = {}
-        self.opening_book_loaded: bool = False
-        self.opening_book_failed: bool = False
-
-    # ───── generic board hashing (canonical mirror handling) ────────────────
+    
     def get_board_hash(self, board: np.ndarray) -> str:
-        canonical = self._get_canonical_board(board)
-        return canonical.tobytes().hex()
-
+        """Get a hash string for the board state, using canonical form for symmetry."""
+        canonical_board = self._get_canonical_board(board)
+        return canonical_board.tobytes().hex()
+    
     def _get_canonical_board(self, board: np.ndarray) -> np.ndarray:
+        """
+        Get the canonical form of the board by choosing the lexicographically smaller
+        representation between the original and its horizontal mirror.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+            
+        Returns
+        -------
+        np.ndarray
+            The canonical board representation.
+        """
+        # Mirror the board horizontally (flip left-right)
         mirrored = np.fliplr(board)
-        return board if board.flatten().tolist() <= mirrored.flatten().tolist() else mirrored
-
+        
+        # Compare boards lexicographically to determine canonical form
+        # We flatten and compare as 1D arrays for efficiency
+        original_flat = board.flatten()
+        mirrored_flat = mirrored.flatten()
+        
+        # Return the lexicographically smaller one
+        for i in range(len(original_flat)):
+            if original_flat[i] < mirrored_flat[i]:
+                return board
+            elif original_flat[i] > mirrored_flat[i]:
+                return mirrored
+        
+        # If they're equal, return the original
+        return board
+    
     def _is_board_mirrored(self, board: np.ndarray) -> bool:
-        return not np.array_equal(board, self._get_canonical_board(board))
-
+        """
+        Check if the canonical form is the mirrored version of the original board.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+            
+        Returns
+        -------
+        bool
+            True if the canonical form is the mirrored version.
+        """
+        canonical = self._get_canonical_board(board)
+        return not np.array_equal(canonical, board)
+    
     def _mirror_move(self, move: PlayerAction) -> PlayerAction:
+        """
+        Mirror a move horizontally.
+        
+        Parameters
+        ----------
+        move : PlayerAction
+            The original move.
+            
+        Returns
+        -------
+        PlayerAction
+            The mirrored move.
+        """
         return PlayerAction(BOARD_COLS - 1 - int(move))
-
-    # ───── transposition-table helpers ──────────────────────────────────────
-    def store_position(
-        self,
-        board: np.ndarray,
-        depth: int,
-        value: float,
-        best_move: Optional[PlayerAction],
-        flag: str,
-    ):
+    
+    def store_position(self, board: np.ndarray, depth: int, value: float, 
+                      best_move: Optional[PlayerAction], flag: str):
+        """Store a position in the transposition table, handling symmetry."""
+        board_hash = self.get_board_hash(board)
+        
+        # If the canonical form is mirrored, mirror the best move before storing
         if best_move is not None and self._is_board_mirrored(board):
             best_move = self._mirror_move(best_move)
-
-        self.transposition_table[self.get_board_hash(board)] = TranspositionEntry(
+        
+        self.transposition_table[board_hash] = TranspositionEntry(
             value=value, depth=depth, best_move=best_move, flag=flag
         )
-
-    def lookup_position(
-        self, board: np.ndarray, depth: int, alpha: float, beta: float
-    ) -> Tuple[bool, float]:
-        entry = self.transposition_table.get(self.get_board_hash(board))
-        if entry is None or entry.depth < depth:
+    
+    def lookup_position(self, board: np.ndarray, depth: int, alpha: float, beta: float) -> Tuple[bool, float]:
+        """Look up a position in the transposition table, handling symmetry."""
+        board_hash = self.get_board_hash(board)
+        if board_hash not in self.transposition_table:
             return False, 0.0
-
-        if entry.flag == "exact":
+        
+        entry = self.transposition_table[board_hash]
+        if entry.depth < depth:
+            return False, 0.0
+        
+        if entry.flag == 'exact':
             return True, entry.value
-        if entry.flag == "lower" and entry.value >= beta:
+        elif entry.flag == 'lower' and entry.value >= beta:
             return True, entry.value
-        if entry.flag == "upper" and entry.value <= alpha:
+        elif entry.flag == 'upper' and entry.value <= alpha:
             return True, entry.value
+        
         return False, 0.0
-
+    
     def get_best_move(self, board: np.ndarray) -> Optional[PlayerAction]:
-        entry = self.transposition_table.get(self.get_board_hash(board))
-        if entry and entry.best_move is not None:
-            return (
-                self._mirror_move(entry.best_move)
-                if self._is_board_mirrored(board)
-                else entry.best_move
-            )
+        """Get the best move for a position if available, handling symmetry."""
+        board_hash = self.get_board_hash(board)
+        if board_hash in self.transposition_table:
+            best_move = self.transposition_table[board_hash].best_move
+            if best_move is not None:
+                # If the canonical form is mirrored, mirror the move back
+                if self._is_board_mirrored(board):
+                    return self._mirror_move(best_move)
+                else:
+                    return best_move
         return None
-
-    # ───── move-ordering helpers ────────────────────────────────────────────
+    
     def get_move_ordering(self, board: np.ndarray) -> list[PlayerAction]:
-        return self.move_ordering.get(self.get_board_hash(board), [])
-
+        """Get move ordering for a position."""
+        board_hash = self.get_board_hash(board)
+        if board_hash in self.move_ordering:
+            return self.move_ordering[board_hash]
+        return []
+    
     def store_move_ordering(self, board: np.ndarray, moves: list[PlayerAction]):
-        self.move_ordering[self.get_board_hash(board)] = moves
-
-    # ───── opening-book helpers ─────────────────────────────────────────────
-    def _board_to_book_key(self, board: np.ndarray) -> str:
-        """
-        Encode the position exactly like the UCI dataset: column-major,
-        bottom-to-top, 'x' (PLAYER1) / 'o' (PLAYER2) / 'b' (empty).
-        """
-        symbols = []
-        for col in range(BOARD_COLS):
-            for row in range(BOARD_ROWS):  # bottom → top (row 0 is bottom)
-                piece = board[row, col]
-                symbols.append(
-                    "x" if piece == PLAYER1 else "o" if piece == PLAYER2 else "b"
-                )
-        return "".join(symbols)
-
-    def _load_opening_book(self) -> None:
-        """One-shot download → unzip → CSV parse → dict[{key}=value]."""
-        if self.opening_book_loaded or self.opening_book_failed:
-            return
-
-        print("DEBUG: Attempting to load opening book...")
-        url = "https://archive.ics.uci.edu/static/public/26/connect+4.zip"
-        try:
-            print("DEBUG: Trying to download opening book from UCI repository...")
-            # Try live download first
-            with urllib.request.urlopen(url, timeout=10) as r:
-                zf = zipfile.ZipFile(io.BytesIO(r.read()))
-                print("DEBUG: Successfully downloaded and opened zip file")
-        except (URLError, HTTPError, TimeoutError, zipfile.BadZipFile) as e:
-            print(f"DEBUG: Download failed ({e}), trying local copy...")
-            try:  # fall back to the user-supplied local copy
-                zf = zipfile.ZipFile("connect+4.zip")
-                print("DEBUG: Successfully opened local zip file")
-            except Exception as e:
-                print(f"DEBUG: Local copy also failed ({e}), opening book disabled")
-                self.opening_book_failed = True
-                return
-
-        csv_name = next((n for n in zf.namelist() if n.endswith("connect-4.csv")), None)
-        if csv_name is None:
-            print("DEBUG: No connect-4.csv found in zip file")
-            self.opening_book_failed = True
-            return
-
-        print(f"DEBUG: Found CSV file: {csv_name}, parsing positions...")
-        raw_text = zf.read(csv_name).decode("utf-8", errors="ignore")
-        position_count = 0
-        for row in csv.reader(io.StringIO(raw_text)):
-            if len(row) != 43:  # 42 squares + outcome
-                continue
-            key, outcome = "".join(row[:-1]), row[-1].strip()
-            self.opening_book[key] = (
-                math.inf
-                if outcome == "win"
-                else -math.inf
-                if outcome == "loss"
-                else 0.0
-            )
-            position_count += 1
-
-        print(f"DEBUG: Successfully loaded {position_count} positions into opening book")
-        self.opening_book_loaded = True
-
-    def lookup_opening_book(self, board: np.ndarray) -> Optional[float]:
-        """
-        Return the solved game-theoretic value for *exactly* this position,
-        or None if it’s not in the 8-ply table (or the book failed to load).
-        """
-        if not (self.opening_book_loaded or self.opening_book_failed):
-            self._load_opening_book()
-        if not self.opening_book:
-            return None
-        return self.opening_book.get(self._board_to_book_key(board))
-
-
-
+        """Store move ordering for a position."""
+        board_hash = self.get_board_hash(board)
+        self.move_ordering[board_hash] = moves
 
 def _get_valid_columns(board: np.ndarray) -> list[int]:
     """
@@ -289,60 +256,81 @@ def _negamax(
     beta: float,
     turn: BoardPiece,
     state: MinimaxSavedState,
-    deadline: float,
+    deadline: float
 ) -> float:
     """
-    Negamax search with alpha-beta pruning, transposition table and
-    opening-book short-circuit.
-    """
-    # ── timing guard ────────────────────────────────────────────────────────
-    if time.monotonic() > deadline:
-        raise TimeoutError
+    Negamax search with alpha-beta pruning and transposition table.
 
-    # ── transposition table probe ───────────────────────────────────────────
+    Parameters
+    ----------
+    board : np.ndarray
+        Board state.
+    depth : int
+        Search depth.
+    alpha : float
+        Alpha value.
+    beta : float
+        Beta value.
+    turn : BoardPiece
+        Player to move.
+    state : MinimaxSavedState
+        The saved state with transposition table.
+    deadline : float
+        Time deadline for search.
+
+    Returns
+    -------
+    float
+        Heuristic value of the board.
+    """
+    if time.monotonic() > deadline:
+        raise TimeoutError  # Stop search if time limit exceeded
+    
+    # Check transposition table first
     found, tt_value = state.lookup_position(board, depth, alpha, beta)
     if found:
         return tt_value
-
-    # ── perfect 8-ply opening-book probe ───────────────────────────────────
-    book_val = state.lookup_opening_book(board)
-    if book_val is not None:
-        return book_val
-
+    
     original_alpha = alpha
-
-    # ── terminal tests ──────────────────────────────────────────────────────
+    
+    # Check for terminal states
     previous_player = _other(turn)
-    end_state = check_end_state(board, previous_player)
-    if end_state == GameState.IS_WIN:
-        return -math.inf  # previous player just won
-    if end_state == GameState.IS_DRAW:
+    game_state = check_end_state(board, previous_player)
+    if game_state == GameState.IS_WIN:
+        return -math.inf  # Previous player just won
+    if game_state == GameState.IS_DRAW:
         return 0.0
     if depth == 0:
         return _heuristic(board, turn)
-
-    # ── recursive search ────────────────────────────────────────────────────
+    
+    # Search all moves
     value = -math.inf
-    best_move: Optional[PlayerAction] = None
-
+    best_move = None
     valid_cols = _get_valid_columns(board)
-    for col in _order_moves(board, valid_cols, state):
+    ordered_moves = _order_moves(board, valid_cols, state)
+    
+    for col in ordered_moves:
         if time.monotonic() > deadline:
             raise TimeoutError
-
-        child = board.copy()
-        apply_player_action(child, PlayerAction(col), turn)
-        score = -_negamax(child, depth - 1, -beta, -alpha, _other(turn), state, deadline)
-
+        
+        new_board = board.copy()
+        apply_player_action(new_board, PlayerAction(col), turn)
+        
+        # Negamax recursion: switch player and invert score
+        score = -_negamax(new_board, depth - 1, -beta, -alpha, _other(turn), state, deadline)
+        
         if score > value:
-            value, best_move = score, PlayerAction(col)
+            value = score
+            best_move = PlayerAction(col)
+        
         alpha = max(alpha, score)
-        if alpha >= beta:  # beta cut-off
-            break
-
-    # ── store TT entry ──────────────────────────────────────────────────────
+        if alpha >= beta:
+            break  # Beta cutoff
+    
+    # Store in transposition table
     flag = _get_transposition_flag(value, original_alpha, beta)
     state.store_position(board, depth, value, best_move, flag)
+    
     return value
 
 
@@ -405,28 +393,41 @@ def _search_depth(
 
 
 def _initialize_search(
-    board: np.ndarray, saved_state: Optional[SavedState]
+    board: np.ndarray,
+    saved_state: Optional[SavedState]
 ) -> Tuple[MinimaxSavedState, list[int], int]:
     """
-    Create/reuse `MinimaxSavedState`, load the opening book once,
-    determine the current set of valid moves, and pick a starting guess.
+    Initialize the search state and determine starting move.
+    
+    Parameters
+    ----------
+    board : np.ndarray
+        The game board.
+    saved_state : Optional[SavedState]
+        The saved state from previous moves.
+        
+    Returns
+    -------
+    Tuple[MinimaxSavedState, list[int], int]
+        Initialized state, valid columns, and starting best column.
     """
-    # ── saved state (reuse if possible) ─────────────────────────────────────
+    # Initialize or reuse saved state
     if saved_state is None or not isinstance(saved_state, MinimaxSavedState):
         state = MinimaxSavedState()
     else:
         state = saved_state
-
-    # ── one-time attempt to load the 8-ply book ────────────────────────────
-    state._load_opening_book()
-
-    # ── legal moves & initial best guess ───────────────────────────────────
+    
     valid_cols = _get_valid_columns(board)
     if not valid_cols:
-        raise RuntimeError("No valid moves available")
-
-    best_move = state.get_best_move(board)
-    best_col = int(best_move) if best_move is not None and int(best_move) in valid_cols else valid_cols[0]
+        raise Exception("No valid moves available.")
+    
+    # Check if we have a best move from previous search
+    best_col = state.get_best_move(board)
+    if best_col is None or int(best_col) not in valid_cols:
+        best_col = valid_cols[0]
+    else:
+        best_col = int(best_col)
+    
     return state, valid_cols, best_col
 
 
@@ -468,8 +469,6 @@ def generate_move_time_limited(
         while True:
             if time.monotonic() > deadline:
                 break
-            
-            print(f"Searching at depth {depth}...")
             
             # Search at current depth
             local_best_col, local_best_score = _search_depth(
