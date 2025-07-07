@@ -1,0 +1,265 @@
+"""
+Transposition table implementation for minimax agent.
+
+This module handles the storage and retrieval of previously computed game positions
+to avoid redundant calculations during search.
+"""
+
+import numpy as np
+from typing import Optional, Dict
+from dataclasses import dataclass
+
+from game_utils import PlayerAction, BoardPiece, BOARD_COLS
+
+
+@dataclass
+class TranspositionEntry:
+    """
+    Entry in the transposition table.
+    
+    Attributes
+    ----------
+    value : float
+        The evaluated value of the position.
+    depth : int
+        The depth at which this position was evaluated.
+    best_move : Optional[PlayerAction]
+        The best move found for this position.
+    flag : str
+        The type of bound: 'exact', 'lower' (beta cutoff), or 'upper' (alpha cutoff).
+    """
+    value: float
+    depth: int
+    best_move: Optional[PlayerAction]
+    flag: str
+
+
+class TranspositionTable:
+    """
+    Transposition table for storing previously computed positions.
+    
+    The table uses board symmetry to reduce memory usage by storing only
+    the canonical form of each position.
+    """
+    
+    def __init__(self, max_table_size: int = 1000000):
+        """
+        Initialize the transposition table.
+        
+        Parameters
+        ----------
+        max_table_size : int
+            Maximum number of entries in the table before cleanup.
+        """
+        self.table: Dict[str, TranspositionEntry] = {}
+        self.max_table_size = max_table_size
+    
+    def __len__(self) -> int:
+        """Return the number of entries in the table."""
+        return len(self.table)
+    
+    def _cleanup_table_if_needed(self):
+        """
+        Clean up transposition table if it gets too large.
+        
+        Uses a simple strategy of removing the oldest entries.
+        A more sophisticated implementation could use LRU or depth-based cleanup.
+        """
+        if len(self.table) > self.max_table_size:
+            items_to_remove = len(self.table) - self.max_table_size // 2
+            keys_to_remove = list(self.table.keys())[:items_to_remove]
+            for key in keys_to_remove:
+                del self.table[key]
+    
+    def get_board_hash(self, board: np.ndarray) -> str:
+        """
+        Get a hash string for the board state using canonical form for symmetry.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+            
+        Returns
+        -------
+        str
+            Hexadecimal hash string of the canonical board.
+        """
+        canonical_board = self._get_canonical_board(board)
+        return canonical_board.tobytes().hex()
+    
+    def _get_canonical_board(self, board: np.ndarray) -> np.ndarray:
+        """
+        Get the canonical form of the board by choosing the lexicographically smaller
+        representation between the original and its horizontal mirror.
+        
+        This takes advantage of Connect Four's horizontal symmetry to reduce
+        the number of unique positions we need to store.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+            
+        Returns
+        -------
+        np.ndarray
+            The canonical board representation.
+        """
+        # Mirror the board horizontally (flip left-right)
+        mirrored = np.fliplr(board)
+        
+        # Compare boards lexicographically to determine canonical form
+        original_flat = board.flatten()
+        mirrored_flat = mirrored.flatten()
+        
+        # Return the lexicographically smaller one
+        for i in range(len(original_flat)):
+            if original_flat[i] < mirrored_flat[i]:
+                return board
+            elif original_flat[i] > mirrored_flat[i]:
+                return mirrored
+        
+        # If they're equal, return the original
+        return board
+    
+    def _is_board_mirrored(self, board: np.ndarray) -> bool:
+        """
+        Check if the canonical form is the mirrored version of the original board.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+            
+        Returns
+        -------
+        bool
+            True if the canonical form is the mirrored version.
+        """
+        mirrored = np.fliplr(board)
+        original_flat = board.flatten()
+        mirrored_flat = mirrored.flatten()
+        
+        # Check if mirrored version is lexicographically smaller
+        for i in range(len(original_flat)):
+            if original_flat[i] < mirrored_flat[i]:
+                return False  # Original is smaller, not mirrored
+            elif original_flat[i] > mirrored_flat[i]:
+                return True   # Mirrored is smaller, so canonical is mirrored
+        
+        # If they're equal, canonical is original (not mirrored)
+        return False
+    
+    def _mirror_move(self, move: PlayerAction) -> PlayerAction:
+        """
+        Mirror a move horizontally.
+        
+        Parameters
+        ----------
+        move : PlayerAction
+            The original move.
+            
+        Returns
+        -------
+        PlayerAction
+            The mirrored move.
+        """
+        return PlayerAction(BOARD_COLS - 1 - int(move))
+    
+    def store_position(self, board: np.ndarray, depth: int, value: float, 
+                      best_move: Optional[PlayerAction], flag: str):
+        """
+        Store a position in the transposition table, handling symmetry.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+        depth : int
+            The depth at which this position was evaluated.
+        value : float
+            The evaluated value of the position.
+        best_move : Optional[PlayerAction]
+            The best move found for this position.
+        flag : str
+            The type of bound: 'exact', 'lower', or 'upper'.
+        """
+        board_hash = self.get_board_hash(board)
+        
+        # If the canonical form is mirrored, mirror the best move before storing
+        if best_move is not None and self._is_board_mirrored(board):
+            best_move = self._mirror_move(best_move)
+        
+        self.table[board_hash] = TranspositionEntry(
+            value=value, depth=depth, best_move=best_move, flag=flag
+        )
+        
+        # Clean up table if it gets too large
+        self._cleanup_table_if_needed()
+    
+    def lookup_position(self, board: np.ndarray, depth: int, alpha: float, beta: float):
+        """
+        Look up a position in the transposition table, handling symmetry.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+        depth : int
+            The required minimum depth.
+        alpha : float
+            The alpha bound.
+        beta : float
+            The beta bound.
+            
+        Returns
+        -------
+        tuple[bool, float]
+            A tuple of (found, value) where found indicates if a usable
+            entry was found and value is the stored value.
+        """
+        board_hash = self.get_board_hash(board)
+        if board_hash not in self.table:
+            return False, 0.0
+        
+        entry = self.table[board_hash]
+        
+        # Only use entries with sufficient depth
+        if entry.depth < depth:
+            return False, 0.0
+        
+        # Check bounds and return appropriate values
+        if entry.flag == 'exact':
+            return True, entry.value
+        elif entry.flag == 'lower' and entry.value >= beta:
+            return True, entry.value
+        elif entry.flag == 'upper' and entry.value <= alpha:
+            return True, entry.value
+        
+        return False, 0.0
+    
+    def get_best_move(self, board: np.ndarray) -> Optional[PlayerAction]:
+        """
+        Get the best move for a position if available, handling symmetry.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+            
+        Returns
+        -------
+        Optional[PlayerAction]
+            The best move if available, None otherwise.
+        """
+        board_hash = self.get_board_hash(board)
+        if board_hash in self.table:
+            best_move = self.table[board_hash].best_move
+            if best_move is not None:
+                # If the canonical form is mirrored, mirror the move back
+                if self._is_board_mirrored(board):
+                    return self._mirror_move(best_move)
+                else:
+                    return best_move
+        return None
