@@ -30,9 +30,20 @@ class TranspositionEntry:
 class MinimaxSavedState(SavedState):
     """Saved state for minimax agent with transposition table."""
     
-    def __init__(self):
+    def __init__(self, max_table_size: int = 1000000):
         self.transposition_table: Dict[str, TranspositionEntry] = {}
         self.move_ordering: Dict[str, list[PlayerAction]] = {}
+        self.max_table_size = max_table_size
+    
+    def _cleanup_table_if_needed(self):
+        """Clean up transposition table if it gets too large."""
+        if len(self.transposition_table) > self.max_table_size:
+            # Remove oldest entries (simple cleanup strategy)
+            # In a more sophisticated implementation, we could use LRU or depth-based cleanup
+            items_to_remove = len(self.transposition_table) - self.max_table_size // 2
+            keys_to_remove = list(self.transposition_table.keys())[:items_to_remove]
+            for key in keys_to_remove:
+                del self.transposition_table[key]
     
     def get_board_hash(self, board: np.ndarray) -> str:
         """Get a hash string for the board state, using canonical form for symmetry."""
@@ -86,8 +97,20 @@ class MinimaxSavedState(SavedState):
         bool
             True if the canonical form is the mirrored version.
         """
-        canonical = self._get_canonical_board(board)
-        return not np.array_equal(canonical, board)
+        # More efficient: directly compare with mirrored version
+        mirrored = np.fliplr(board)
+        original_flat = board.flatten()
+        mirrored_flat = mirrored.flatten()
+        
+        # Check if mirrored version is lexicographically smaller
+        for i in range(len(original_flat)):
+            if original_flat[i] < mirrored_flat[i]:
+                return False  # Original is smaller, not mirrored
+            elif original_flat[i] > mirrored_flat[i]:
+                return True   # Mirrored is smaller, so canonical is mirrored
+        
+        # If they're equal, canonical is original (not mirrored)
+        return False
     
     def _mirror_move(self, move: PlayerAction) -> PlayerAction:
         """
@@ -117,6 +140,9 @@ class MinimaxSavedState(SavedState):
         self.transposition_table[board_hash] = TranspositionEntry(
             value=value, depth=depth, best_move=best_move, flag=flag
         )
+        
+        # Clean up table if it gets too large
+        self._cleanup_table_if_needed()
     
     def lookup_position(self, board: np.ndarray, depth: int, alpha: float, beta: float) -> Tuple[bool, float]:
         """Look up a position in the transposition table, handling symmetry."""
@@ -125,9 +151,12 @@ class MinimaxSavedState(SavedState):
             return False, 0.0
         
         entry = self.transposition_table[board_hash]
+        
+        # Only use entries with sufficient depth
         if entry.depth < depth:
             return False, 0.0
         
+        # Check bounds and return appropriate values
         if entry.flag == 'exact':
             return True, entry.value
         elif entry.flag == 'lower' and entry.value >= beta:
@@ -211,14 +240,24 @@ def _order_moves(board: np.ndarray, valid_cols: list[int],
     # Add center columns first (better move ordering for Connect Four)
     center = BOARD_COLS // 2
     for offset in range(BOARD_COLS):
-        for direction in [-1, 1]:
-            col = center + direction * offset
-            if 0 <= col < BOARD_COLS and col in remaining_cols:
-                ordered_moves.append(col)
-                remaining_cols.remove(col)
-                break
+        if not remaining_cols:  # No more columns to add
+            break
+        
+        # Try center column first
+        if offset == 0:
+            if center in remaining_cols:
+                ordered_moves.append(center)
+                remaining_cols.remove(center)
+        else:
+            # Try columns to the right and left of center
+            for direction in [1, -1]:
+                col = center + direction * offset
+                if 0 <= col < BOARD_COLS and col in remaining_cols:
+                    ordered_moves.append(col)
+                    remaining_cols.remove(col)
+                    break
     
-    # Add any remaining columns
+    # Add any remaining columns (should not happen with correct logic)
     ordered_moves.extend(remaining_cols)
     return ordered_moves
 
@@ -307,6 +346,11 @@ def _negamax(
     value = -math.inf
     best_move = None
     valid_cols = _get_valid_columns(board)
+    
+    # Handle case where no valid moves exist (should not happen in normal game)
+    if not valid_cols:
+        return 0.0  # Return neutral score if no moves available
+    
     ordered_moves = _order_moves(board, valid_cols, state)
     
     for col in ordered_moves:
@@ -435,7 +479,8 @@ def generate_move_time_limited(
     board: np.ndarray,
     player: BoardPiece,
     saved_state: Optional[SavedState] = None,
-    time_limit_secs: float = 5.0
+    time_limit_secs: float = 5.0,
+    max_depth: int = 20
 ) -> Tuple[PlayerAction, Optional[SavedState]]:
     """
     Generate a move for the given player using iterative deepening Negamax with alpha-beta pruning.
@@ -450,12 +495,22 @@ def generate_move_time_limited(
         State to persist between moves (default is None).
     time_limit_secs : float, optional
         Time limit for move search in seconds (default is 5.0).
+    max_depth : int, optional
+        Maximum search depth (default is 20).
 
     Returns
     -------
     Tuple[PlayerAction, Optional[SavedState]]
         The chosen move and updated state.
     """
+    # Input validation
+    if time_limit_secs <= 0:
+        raise ValueError("Time limit must be positive")
+    if max_depth <= 0:
+        raise ValueError("Maximum depth must be positive")
+    if player not in [PLAYER1, PLAYER2]:
+        raise ValueError("Player must be PLAYER1 or PLAYER2")
+    
     start_time = time.monotonic()
     deadline = start_time + time_limit_secs
     
@@ -463,10 +518,11 @@ def generate_move_time_limited(
     state, valid_cols, best_col = _initialize_search(board, saved_state)
     best_score = -math.inf
     depth = 1
+    completed_depth = 0
 
     # Iterative deepening: increase search depth until time runs out
     try:
-        while True:
+        while depth <= max_depth:
             if time.monotonic() > deadline:
                 break
             
@@ -475,15 +531,18 @@ def generate_move_time_limited(
                 board, player, depth, valid_cols, state, deadline
             )
             
+            # Only update if search completed successfully
             best_score = local_best_score
             best_col = local_best_col
+            completed_depth = depth
             depth += 1
             
     except TimeoutError:
         pass  # Return the best move found so far if time runs out
     
-    # Store the best move for the root position
-    state.store_position(board, depth - 1, best_score, PlayerAction(best_col), 'exact')
+    # Store the best move for the root position with the completed depth
+    if completed_depth > 0:
+        state.store_position(board, completed_depth, best_score, PlayerAction(best_col), 'exact')
     
     return PlayerAction(best_col), state
 
