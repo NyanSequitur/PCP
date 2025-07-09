@@ -32,6 +32,9 @@ def iterative_deepening_search(
     2. It can be interrupted at any time with a reasonable result
     3. The overhead of re-searching shallow depths is minimal due to exponential
        growth of search tree size
+    4. SEARCH CONTINUATION: If the transposition table already contains analysis
+       for this position at depth N, we start searching from depth N+1 instead
+       of depth 1, avoiding redundant work when the opponent makes predicted moves.
     
     Parameters
     ----------
@@ -68,13 +71,33 @@ def iterative_deepening_search(
     best_score = -float('inf')
     completed_depth = 0
     
-    # Check if we have a best move from transposition table
-    tt_best_move = tt.get_best_move(board)
-    if tt_best_move is not None and int(tt_best_move) in valid_cols:
-        best_col = int(tt_best_move)
+    # Check if we have a stored result from transposition table
+    stored_depth, stored_value, stored_best_move = tt.get_stored_result(board)
+    
+    # Use stored best move if available and valid
+    if stored_best_move is not None and int(stored_best_move) in valid_cols:
+        best_col = int(stored_best_move)
+        
+    # Use stored score if we have an exact value
+    if stored_value is not None:
+        best_score = stored_value
+    
+    # Start from the next depth after the stored depth, or depth 1 if nothing stored
+    # This allows us to continue from where we left off rather than starting over
+    start_depth = max(1, stored_depth + 1)
+    
+    # If we have a stored result at sufficient depth, use it as our initial state
+    if stored_depth > 0:
+        completed_depth = stored_depth
+        # Optional debug output
+        if __debug__:
+            print(f"Continuing search from depth {start_depth} (stored depth: {stored_depth})")
+    else:
+        if __debug__:
+            print(f"Starting fresh search from depth {start_depth}")
     
     # Iterative deepening: increase search depth until time runs out
-    depth = 1
+    depth = start_depth
     try:
         while depth <= max_depth and time.monotonic() < deadline:
             # Search at current depth
@@ -86,6 +109,9 @@ def iterative_deepening_search(
             best_score = local_best_score
             best_col = local_best_col
             completed_depth = depth
+            
+            # Store the result for this depth in the transposition table
+            tt.store_position(board, depth, best_score, PlayerAction(best_col), 'exact')
             
             # Check if we found a winning move
             if best_score >= 1000.0:  # Win threshold

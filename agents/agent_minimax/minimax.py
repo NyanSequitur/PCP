@@ -82,12 +82,6 @@ def generate_move_time_limited(
     # Calculate search time
     search_time = time.monotonic() - start_time
     
-    # Store the best move for the root position
-    if completed_depth > 0:
-        state.transposition_table.store_position(
-            board, completed_depth, best_score, PlayerAction(best_col), 'exact'
-        )
-    
     # Optional: Print search statistics for debugging
     if __debug__:
         stats = get_search_statistics(

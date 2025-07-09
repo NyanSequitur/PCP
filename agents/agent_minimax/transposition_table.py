@@ -6,7 +6,7 @@ to avoid redundant calculations during search.
 """
 
 import numpy as np
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 from dataclasses import dataclass
 
 from game_utils import PlayerAction, BoardPiece, BOARD_COLS
@@ -239,6 +239,64 @@ class TranspositionTable:
         
         return False, 0.0
     
+    def get_stored_result(self, board: np.ndarray) -> Tuple[int, Optional[float], Optional[PlayerAction]]:
+        """
+        Get the stored depth, value, and best move for a position if available.
+        
+        This is useful for search continuation - if we have a good result stored,
+        we can use it as our starting point for deeper search.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+            
+        Returns
+        -------
+        Tuple[int, Optional[float], Optional[PlayerAction]]
+            A tuple of (depth, value, best_move) where depth is the stored depth
+            (0 if not found), value is the stored value (None if not found or not exact),
+            and best_move is the best move (None if not found).
+        """
+        board_hash = self.get_board_hash(board)
+        if board_hash in self.table:
+            entry = self.table[board_hash]
+            best_move = entry.best_move
+            
+            # If the canonical form is mirrored, mirror the move back
+            if best_move is not None and self._is_board_mirrored(board):
+                best_move = self._mirror_move(best_move)
+            
+            # Only return value if it's exact (not a bound)
+            value = entry.value if entry.flag == 'exact' else None
+            
+            return entry.depth, value, best_move
+        
+        return 0, None, None
+
+    def get_stored_depth(self, board: np.ndarray) -> int:
+        """
+        Get the depth at which a position was previously stored in the table.
+        
+        This is useful for search continuation - if we've already analyzed
+        a position deeply, we can start the next search from that depth
+        rather than starting from depth 1.
+        
+        Parameters
+        ----------
+        board : np.ndarray
+            The game board.
+            
+        Returns
+        -------
+        int
+            The depth at which this position was stored, or 0 if not found.
+        """
+        board_hash = self.get_board_hash(board)
+        if board_hash in self.table:
+            return self.table[board_hash].depth
+        return 0
+
     def get_best_move(self, board: np.ndarray) -> Optional[PlayerAction]:
         """
         Get the best move for a position if available, handling symmetry.
