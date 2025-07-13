@@ -165,33 +165,21 @@ class TestMinimaxInputValidation:
         """Test that invalid time limits raise appropriate errors."""
         board = initialize_game_state()
         
-        with pytest.raises(ValueError, match="Time limit cannot be zero"):
+        with pytest.raises(ValueError, match="Time limit must be positive"):
             generate_move_time_limited(board, PLAYER1, time_limit_secs=0.0)
         
-        # Negative time limit is now allowed (means unlimited)
-        # Should work when max_depth is positive
-        move, state = generate_move_time_limited(board, PLAYER1, time_limit_secs=-1.0, max_depth=3)
-        assert 0 <= move < BOARD_COLS  # Check valid column
-        
-        # But should fail when both are negative
-        with pytest.raises(ValueError, match="At least one of time_limit_secs or max_depth must be non-negative"):
-            generate_move_time_limited(board, PLAYER1, time_limit_secs=-1.0, max_depth=-1)
+        with pytest.raises(ValueError, match="Time limit must be positive"):
+            generate_move_time_limited(board, PLAYER1, time_limit_secs=-1.0)
     
     def test_invalid_max_depth(self):
         """Test that invalid max depth raises appropriate errors."""
         board = initialize_game_state()
         
-        with pytest.raises(ValueError, match="Maximum depth cannot be zero"):
+        with pytest.raises(ValueError, match="Maximum depth must be positive"):
             generate_move_time_limited(board, PLAYER1, max_depth=0)
         
-        # Negative max depth is now allowed (means unlimited)
-        # Should work when time_limit_secs is positive
-        move, state = generate_move_time_limited(board, PLAYER1, time_limit_secs=0.1, max_depth=-1)
-        assert 0 <= move < BOARD_COLS  # Check valid column
-        
-        # But should fail when both are negative
-        with pytest.raises(ValueError, match="At least one of time_limit_secs or max_depth must be non-negative"):
-            generate_move_time_limited(board, PLAYER1, time_limit_secs=-1.0, max_depth=-1)
+        with pytest.raises(ValueError, match="Maximum depth must be positive"):
+            generate_move_time_limited(board, PLAYER1, max_depth=-1)
     
     def test_invalid_player(self):
         """Test that invalid player values raise appropriate errors."""

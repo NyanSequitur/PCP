@@ -198,11 +198,7 @@ def get_search_statistics(
         'search_time': search_time,
         'tt_size': len(tt.table),
         'tt_max_size': tt.max_table_size,
-        'tt_hit_rate': (tt.hits / tt.lookups * 100) if tt.lookups > 0 else 0.0,
-        'tt_hits': getattr(tt, 'hits', 0),
-        'tt_lookups': getattr(tt, 'lookups', 0),
-        'tt_stores': getattr(tt, 'stores', 0),
-        'tt_collisions': getattr(tt, 'collisions', 0)
+        'tt_hit_rate': _estimate_tt_hit_rate(tt)
     }
 
 
