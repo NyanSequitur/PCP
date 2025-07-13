@@ -1,3 +1,10 @@
+"""
+Benchmark module for testing minimax agent win rates against random player.
+
+This module provides functions to test the performance of the minimax agent
+by playing multiple games against a random agent and calculating win rates.
+"""
+
 import sys
 import copy
 from game_utils import (
@@ -10,6 +17,21 @@ from agents.agent_minimax.saved_state import MinimaxSavedState
 from agents.agent_random import random as random_agent
 
 def get_winner(board, player):
+    """
+    Determine the winner of a completed game.
+
+    Parameters
+    ----------
+    board : np.ndarray
+        The game board to check.
+    player : BoardPiece
+        The player who just made a move.
+
+    Returns
+    -------
+    int
+        1 if player won, -1 if player lost, 0 if draw, None if game continues.
+    """
     result = check_end_state(board, player)
     if result == GameState.IS_DRAW:
         return 0
@@ -20,6 +42,21 @@ def get_winner(board, player):
     return None
 
 def play_minimax_vs_random(minimax_first=True, max_depth=6):
+    """
+    Play a single game between minimax and random agents.
+
+    Parameters
+    ----------
+    minimax_first : bool, optional
+        If True, minimax agent plays first (as PLAYER1). Default is True.
+    max_depth : int, optional
+        Maximum search depth for minimax agent. Default is 6.
+
+    Returns
+    -------
+    int
+        Winner of the game: 1 for PLAYER1, -1 for PLAYER2, 0 for draw.
+    """
     board = initialize_game_state()
     player = PLAYER1
     saved_state = {PLAYER1: None, PLAYER2: None}
@@ -47,6 +84,24 @@ def play_minimax_vs_random(minimax_first=True, max_depth=6):
         player = PLAYER1 if player == PLAYER2 else PLAYER2
 
 def benchmark_winrate(num_games=100, max_depth=6):
+    """
+    Benchmark minimax agent win rate against random player.
+
+    Plays multiple games alternating who goes first and calculates
+    win rates, draw rates, and loss rates for the minimax agent.
+
+    Parameters
+    ----------
+    num_games : int, optional
+        Number of games to play. Default is 100.
+    max_depth : int, optional
+        Maximum search depth for minimax agent. Default is 6.
+
+    Returns
+    -------
+    None
+        Prints win rate statistics to console.
+    """
     minimax_wins = 0
     draws = 0
     for i in range(num_games):

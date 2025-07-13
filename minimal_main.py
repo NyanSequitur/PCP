@@ -1,3 +1,10 @@
+"""
+Minimal main entry point for Connect Four game.
+
+This is a simplified version of main.py that directly runs a human vs minimax game
+without the interactive agent selection interface.
+"""
+
 from typing import Callable
 import time
 from game_utils import PLAYER1, PLAYER2, PLAYER1_PRINT, PLAYER2_PRINT, GameState, MoveStatus, GenMove
@@ -18,6 +25,31 @@ def human_vs_agent(
     init_1: Callable = lambda board, player: None,
     init_2: Callable = lambda board, player: None,
 ):
+    """
+    Play games between two agents with role swapping.
+
+    This function plays two games: one with each agent going first.
+    It's a simplified version of the main game function.
+
+    Parameters
+    ----------
+    generate_move_1 : GenMove
+        Move generator for the first agent.
+    generate_move_2 : GenMove, optional
+        Move generator for the second agent (default is user_move).
+    player_1 : str, optional
+        Name for the first agent.
+    player_2 : str, optional
+        Name for the second agent.
+    args_1 : tuple, optional
+        Extra arguments for the first agent's move generator.
+    args_2 : tuple, optional
+        Extra arguments for the second agent's move generator.
+    init_1 : Callable, optional
+        Initialization function for the first agent.
+    init_2 : Callable, optional
+        Initialization function for the second agent.
+    """
 
     players = (PLAYER1, PLAYER2)
     for play_first in (1, -1):

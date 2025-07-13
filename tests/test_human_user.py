@@ -1,3 +1,10 @@
+"""
+Unit tests for human user agent.
+
+This module tests the human user input handling, including input validation,
+conversion from user-facing to internal coordinates, and interaction flows.
+"""
+
 import pytest
 import numpy as np
 from agents.agent_human_user.human_user import user_move, convert_str_to_action

@@ -1,3 +1,10 @@
+"""
+Unit tests for game_utils module.
+
+This module tests the core game logic including board initialization,
+move validation, game state checking, and utility functions.
+"""
+
 import pytest
 import numpy as np
 

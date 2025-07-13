@@ -103,6 +103,19 @@ def human_vs_agent(
                 break
 
 def list_available_agents():
+    """
+    Get a list of all available agents for the game.
+
+    Returns
+    -------
+    list[dict]
+        List of agent information dictionaries, each containing:
+        - name: Internal agent name
+        - module: Python module path
+        - func: Function name to call
+        - display: Human-readable display name
+        - args: Default arguments tuple
+    """
     agent_infos = [
         {
             'name': 'Human',
@@ -129,6 +142,25 @@ def list_available_agents():
     return agent_infos
 
 def pick_agent(player_label):
+    """
+    Interactive agent selection for a player.
+
+    Displays available agents and prompts the user to select one.
+    Continues prompting until a valid selection is made.
+
+    Parameters
+    ----------
+    player_label : str
+        Label for the player (e.g., "Player 1 (X)") to display in prompts.
+
+    Returns
+    -------
+    tuple[Callable, str, tuple]
+        A tuple containing:
+        - The agent's move generation function
+        - The agent's display name
+        - The agent's default arguments
+    """
     agents = list_available_agents()
     print(f"\nSelect agent for {player_label}:")
     for idx, agent in enumerate(agents, 1):
@@ -147,6 +179,17 @@ def pick_agent(player_label):
         print("Invalid choice. Try again.")
 
 def play_game_with_agent_selection():
+    """
+    Main game loop with interactive agent selection.
+
+    Allows users to:
+    - Select agents for both players
+    - Play multiple games with the same agents
+    - Swap sides between games
+    - Change agents or quit
+
+    The function continues until the user chooses to quit.
+    """
     while True:
         func1, name1, args1 = pick_agent("Player 1 (X)")
         func2, name2, args2 = pick_agent("Player 2 (O)")

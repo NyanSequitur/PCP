@@ -1,3 +1,10 @@
+"""
+Unit tests for random agent.
+
+This module tests the random agent's move generation, ensuring it produces
+valid moves and behaves correctly under various board conditions.
+"""
+
 import numpy as np
 from agents.agent_random.random import generate_move_random
 from game_utils import initialize_game_state, PLAYER1, BOARD_COLS, PlayerAction

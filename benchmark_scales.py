@@ -69,6 +69,28 @@ def benchmark_time_and_tt(
     fill_levels: List[float],
     output_file: str = "benchmark_minimax_time_tt.csv"
 ):
+    """
+    Benchmark minimax performance across different parameters.
+
+    Tests the minimax agent with various configurations of max depth,
+    time limits, and board fill levels, recording performance metrics.
+
+    Parameters
+    ----------
+    max_depth_list : List[int]
+        List of maximum search depths to test.
+    time_limits : List[int]
+        List of time limits (in seconds) to test.
+    fill_levels : List[float]
+        List of board fill percentages (0.0 to 1.0) to test.
+    output_file : str, optional
+        CSV file to write results to. Default is "benchmark_minimax_time_tt.csv".
+
+    Returns
+    -------
+    None
+        Results are written to the specified CSV file.
+    """
     with open(output_file, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow([

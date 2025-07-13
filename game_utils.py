@@ -1,9 +1,8 @@
-from __future__ import annotations
+"""
+Utility functions and basic rules for a simple Connect‑Four‑like game.
 
-"""Utility functions and basic rules for a simple Connect‑Four‑like game.
-
-The module implements a 7 × 6 board (columns × rows) where the *lowest* row
-(index 0) is the one in which new pieces are inserted first.  Players drop a
+The module implements a 7 × 6 board (columns × rows) where the *lowest* row
+(index 0) is the one in which new pieces are inserted first.  Players drop a
 piece into a column; the piece occupies the first empty cell in that column.
 
 The public helpers exposed here are **pure** (except for
@@ -11,6 +10,7 @@ The public helpers exposed here are **pure** (except for
 print or read anything.  They are therefore easy to test and reuse.
 """
 
+from __future__ import annotations
 from enum import Enum
 from typing import Any, Callable, Optional
 import os

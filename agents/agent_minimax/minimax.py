@@ -150,6 +150,23 @@ def create_minimax_agent(
     
     def move_function(board: np.ndarray, player: BoardPiece, 
                      saved_state: Optional[SavedState] = None):
+        """
+        Generated move function with configured parameters.
+
+        Parameters
+        ----------
+        board : np.ndarray
+            Current game board.
+        player : BoardPiece  
+            Player to generate move for.
+        saved_state : Optional[SavedState], optional
+            Previous game state to continue from.
+
+        Returns
+        -------
+        tuple
+            Move and updated saved state.
+        """
         return generate_move_time_limited(
             board, player, saved_state, time_limit, max_depth
         )

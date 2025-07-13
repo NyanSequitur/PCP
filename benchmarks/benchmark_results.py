@@ -56,6 +56,7 @@ class TranspositionTableStats:
 class StatsTracker:
     """Simple statistics tracker for benchmarking."""
     def __init__(self):
+        """Initialize a new statistics tracker."""
         self.lookups = 0
         self.hits = 0
         self.stores = 0
@@ -64,15 +65,63 @@ class StatsTracker:
 class StatTrackingWrapper:
     """Wrapper for MinimaxSavedState that tracks statistics."""
     def __init__(self, state: MinimaxSavedState):
+        """
+        Initialize a statistics tracking wrapper.
+
+        Parameters
+        ----------
+        state : MinimaxSavedState
+            The minimax saved state to wrap and track.
+        """
         self.state = state
         self.stats = StatsTracker()
     
     def store_position(self, board, depth: int, value: float,
                       best_move, flag: str):
+        """
+        Store a position and track the operation.
+
+        Parameters
+        ----------
+        board : np.ndarray
+            Game board to store.
+        depth : int
+            Search depth.
+        value : float
+            Position evaluation.
+        best_move : PlayerAction
+            Best move found.
+        flag : str
+            Transposition table flag.
+
+        Returns
+        -------
+        Any
+            Result from underlying store operation.
+        """
         self.stats.stores += 1
         return self.state.store_position(board, depth, value, best_move, flag)
     
     def lookup_position(self, board, depth: int, alpha: float, beta: float):
+        """
+        Look up a position and track the operation.
+
+        Parameters
+        ----------
+        board : np.ndarray
+            Game board to look up.
+        depth : int
+            Search depth.
+        alpha : float
+            Alpha value for alpha-beta pruning.
+        beta : float
+            Beta value for alpha-beta pruning.
+
+        Returns
+        -------
+        tuple
+            (found, value) where found is bool and value is float.
+        """
         self.stats.lookups += 1
         found, value = self.state.lookup_position(board, depth, alpha, beta)
         if found:

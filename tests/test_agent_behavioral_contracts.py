@@ -21,6 +21,7 @@ def agent_factory(request):
     if request.param == 'minimax':
         from agents.agent_minimax.minimax import create_minimax_agent
         def minimax_factory():
+            """Create a minimax agent with test-appropriate parameters."""
             return create_minimax_agent(time_limit=2.0, max_depth=4)
         return minimax_factory
     else:
@@ -32,6 +33,7 @@ def random_agent_factory():
     """Fixture that provides random agent factory for basic testing."""
     from agents.agent_random.random import generate_move_random
     def random_factory():
+        """Create a random agent for testing."""
         return generate_move_random, None
     return random_factory
 
@@ -176,6 +178,7 @@ def test_minimax_behavioral_contracts():
     
     # Create a simple factory function for this agent
     def agent_factory():
+        """Create a minimax agent instance for testing."""
         return agent_func, agent_state
     
     # Run key behavioral tests
@@ -190,6 +193,7 @@ def test_random_behavioral_contracts():
     test_instance = TestAgentBehavioralContracts()
     
     def agent_factory():
+        """Create a random agent instance for testing."""
         return generate_move_random, None
     
     # Run key behavioral tests
