@@ -41,8 +41,10 @@ def generate_move_time_limited(
         State to persist between moves (default is None).
     time_limit_secs : float, optional
         Time limit for move search in seconds (default is 5.0).
+        If negative, no time limit is applied. Cannot be zero.
     max_depth : int, optional
         Maximum search depth (default is 20).
+        If negative, no depth limit is applied. Cannot be zero.
 
     Returns
     -------
@@ -52,15 +54,23 @@ def generate_move_time_limited(
     Raises
     ------
     ValueError
-        If input parameters are invalid.
+        If input parameters are invalid: if both time_limit_secs and max_depth
+        are negative (at least one limit must be applied), if either parameter
+        is zero, or if player is not PLAYER1 or PLAYER2.
     """
     # Input validation
-    if time_limit_secs <= 0:
-        raise ValueError("Time limit must be positive")
-    if max_depth <= 0:
-        raise ValueError("Maximum depth must be positive")
+    if time_limit_secs < 0 and max_depth < 0:
+        raise ValueError("At least one of time_limit_secs or max_depth must be non-negative")
+    if time_limit_secs == 0:
+        raise ValueError("Time limit cannot be zero")
+    if max_depth == 0:
+        raise ValueError("Maximum depth cannot be zero")
     if player not in [PLAYER1, PLAYER2]:
         raise ValueError("Player must be PLAYER1 or PLAYER2")
+    
+    # Handle negative limits - negative means unlimited
+    effective_time_limit = float('inf') if time_limit_secs < 0 else time_limit_secs
+    effective_max_depth = 1000 if max_depth < 0 else max_depth  # Use very large depth for unlimited
     
     start_time = time.monotonic()
     
@@ -73,7 +83,7 @@ def generate_move_time_limited(
     # Perform iterative deepening search
     try:
         best_col, best_score, completed_depth = iterative_deepening_search(
-            board, player, state.transposition_table, time_limit_secs, max_depth
+            board, player, state.transposition_table, effective_time_limit, effective_max_depth
         )
     except ValueError as e:
         # Re-raise validation errors

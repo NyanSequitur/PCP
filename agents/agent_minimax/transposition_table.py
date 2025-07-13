@@ -53,6 +53,13 @@ class TranspositionTable:
         """
         self.table: Dict[str, TranspositionEntry] = {}
         self.max_table_size = max_table_size
+        
+        # Statistics tracking
+        self.lookups = 0
+        self.hits = 0
+        self.stores = 0
+        self.collisions = 0
+        self.nodes_searched = 0  # Track nodes for performance metrics
     
     def __len__(self) -> int:
         """Return the number of entries in the table."""
@@ -191,9 +198,16 @@ class TranspositionTable:
         if best_move is not None and self._is_board_mirrored(board):
             best_move = self._mirror_move(best_move)
         
+        # Check for collisions (existing entry with different value)
+        if board_hash in self.table:
+            existing = self.table[board_hash]
+            if existing.depth < depth:  # Replace if this is deeper
+                self.collisions += 1
+        
         self.table[board_hash] = TranspositionEntry(
             value=value, depth=depth, best_move=best_move, flag=flag
         )
+        self.stores += 1
         
         # Clean up table if it gets too large
         self._cleanup_table_if_needed()
@@ -220,6 +234,8 @@ class TranspositionTable:
             entry was found and value is the stored value.
         """
         board_hash = self.get_board_hash(board)
+        self.lookups += 1
+        
         if board_hash not in self.table:
             return False, 0.0
         
@@ -229,6 +245,9 @@ class TranspositionTable:
         if entry.depth < depth:
             return False, 0.0
         
+        # We found a usable entry
+        self.hits += 1
+        
         # Check bounds and return appropriate values
         if entry.flag == 'exact':
             return True, entry.value
@@ -237,6 +256,8 @@ class TranspositionTable:
         elif entry.flag == 'upper' and entry.value <= alpha:
             return True, entry.value
         
+        # Entry found but not usable due to bounds
+        self.hits -= 1  # Don't count as hit if not usable
         return False, 0.0
     
     def get_stored_result(self, board: np.ndarray) -> Tuple[int, Optional[float], Optional[PlayerAction]]:
@@ -259,6 +280,8 @@ class TranspositionTable:
             and best_move is the best move (None if not found).
         """
         board_hash = self.get_board_hash(board)
+        self.lookups += 1  # Track lookup for statistics
+        
         if board_hash in self.table:
             entry = self.table[board_hash]
             best_move = entry.best_move
@@ -270,6 +293,7 @@ class TranspositionTable:
             # Only return value if it's exact (not a bound)
             value = entry.value if entry.flag == 'exact' else None
             
+            self.hits += 1  # Count as hit since we found the entry
             return entry.depth, value, best_move
         
         return 0, None, None
@@ -321,3 +345,15 @@ class TranspositionTable:
                 else:
                     return best_move
         return None
+
+    def reset_statistics(self):
+        """Reset all statistics counters."""
+        self.lookups = 0
+        self.hits = 0
+        self.stores = 0
+        self.collisions = 0
+        self.nodes_searched = 0
+    
+    def get_hit_rate(self) -> float:
+        """Get the current hit rate as a percentage."""
+        return (self.hits / self.lookups * 100) if self.lookups > 0 else 0.0
